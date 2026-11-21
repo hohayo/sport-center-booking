@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>授權管理後台</title>
+<style>
+  :root { --bg:#fff; --fg:#222; --bd:#ccc; --mut:#777; --pri:#1a73e8; --ok:#0a7d33; --bad:#c62828; --warn:#b26a00; --row:#f6f8fa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1e1f22; --fg:#e8e8e8; --bd:#444; --mut:#999; --pri:#4d8dff; --ok:#4cc474; --bad:#ff6b6b; --warn:#ffb74d; --row:#26282c; }
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--bg); color:var(--fg); font:14px/1.5 sans-serif; margin:0; padding:16px; }
+  main { max-width:1100px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 12px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .card { border:1px solid var(--bd); border-radius:10px; padding:14px; margin-bottom:14px; }
+  label { display:block; font-size:12px; color:var(--mut); margin-bottom:3px; }
+  input { padding:7px; border:1px solid var(--bd); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; max-width:100%; }
+  .grid { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+  button { padding:7px 12px; border:0; border-radius:6px; background:var(--pri); color:#fff; cursor:pointer; font:inherit; }
+  button.s { background:#888; } button.d { background:var(--bad); }
+  button.small { padding:3px 8px; font-size:12px; margin:1px 2px 1px 0; }
+  .wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; min-width:820px; }
+  th, td { border-bottom:1px solid var(--bd); padding:7px 8px; text-align:left; vertical-align:top; }
+  th { font-size:12px; color:var(--mut); font-weight:normal; }
+  tr:nth-child(even) td { background:var(--row); }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:13px; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); } .mut { color:var(--mut); }
+  #msg { min-height:1.5em; margin:6px 0; }
+  .keys { background:var(--row); border:1px dashed var(--ok); border-radius:8px; padding:10px; margin-top:10px; }
+  .dev { font-size:12px; color:var(--mut); margin:4px 0 0 0; }
+  footer { margin-top:24px; text-align:center; font-size:12px; color:#888; }
+</style>
+</head>
+<body>
+<main>
+  <h1><span>授權管理後台</span><span><span id="who" class="mut"></span> <button id="logout" class="s small" hidden>登出</button></span></h1>
+  <div id="msg"></div>
+
+  <!-- 第一次使用：填入專案資訊 -->
+  <div id="setup" class="card" hidden>
+    <b>第一次使用：填入 Supabase 專案資訊</b>
+    <p class="mut">Supabase 後台 → Project Settings → API：複製「Project URL」與「anon / publishable key」。這兩個值本來就是公開的，只會存在這個瀏覽器。<b>不要貼 service_role key。</b></p>
+    <div class="grid">
+      <div><label>Project URL</label><input id="cfg-url" size="40" placeholder="https://xxxx.supabase.co"></div>
+      <div><label>anon / publishable key</label><input id="cfg-anon" size="40"></div>
+      <button id="cfg-save">儲存</button>
+    </div>
+  </div>
+
+  <!-- 登入 -->
+  <div id="login" class="card" hidden>
+    <b>登入</b>
+    <div class="grid" style="margin-top:8px">
+      <div><label>信箱</label><input id="email" type="email" value="hohayo@gmail.com" size="26" autocomplete="username"></div>
+      <div><label>密碼</label><input id="pw" type="password" size="22" autocomplete="current-password"></div>
+      <button id="login-btn">登入</button>
+      <button id="cfg-reset" class="s">重設專案資訊</button>
+    </div>
+  </div>
+
+  <!-- 管理 -->
+  <div id="app" hidden>
+    <div class="card">
+      <b>新增授權碼</b>
+      <div class="grid" style="margin-top:8px">
+        <div><label>有效天數</label><input id="n-days" type="number" min="1" max="3650" value="30" style="width:90px"></div>
+        <div><label>裝置上限</label><input id="n-max" type="number" min="1" max="50" value="2" style="width:90px"></div>
+        <div><label>數量</label><input id="n-count" type="number" min="1" max="20" value="1" style="width:80px"></div>
+        <div><label>備註（例如買家）</label><input id="n-note" maxlength="100" size="24"></div>
+        <button id="n-create">產生</button>
+      </div>
+      <div id="newkeys" class="keys" hidden></div>
+    </div>
+
+    <div class="card">
+      <div class="grid" style="margin-bottom:10px">
+        <div><label>搜尋（授權碼／備註）</label><input id="q" size="26"></div>
+        <button id="reload" class="s">重新整理</button>
+        <span id="count" class="mut"></span>
+      </div>
+      <div class="wrap">
+        <table>
+          <thead><tr><th>授權碼</th><th>備註</th><th>到期</th><th>裝置</th><th>狀態</th><th>操作</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>作者：Kyle, Chuang</footer>
+</main>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const $ = (id) => document.getElementById(id);
+const CFG = 'licenseAdminCfg';
+let cfg = null, sb = null, all = [];
+
+// 以 DOM 建立元素（一律用 textContent，避免備註等欄位造成 XSS）
+const h = (tag, attrs = {}, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') el.className = v; else if (k.startsWith('on')) el[k] = v; else el.setAttribute(k, v);
+  }
+  kids.flat().forEach((c) => el.append(c instanceof Node ? c : document.createTextNode(String(c))));
+  return el;
+};
+const say = (t, cls = '') => { const m = $('msg'); m.textContent = t; m.className = cls; };
+const fmt = (s) => (s ? new Date(s).toLocaleString('zh-TW', { hour12: false }) : '');
+
+// ---------- 設定與登入 ----------
+function loadCfg() { try { return JSON.parse(localStorage.getItem(CFG)); } catch { return null; } }
+function show(which) {
+  ['setup', 'login', 'app'].forEach((id) => ($(id).hidden = id !== which));
+  $('logout').hidden = which !== 'app';
+}
+async function init() {
+  cfg = loadCfg();
+  if (!cfg || !cfg.url || !cfg.anon) return show('setup');
+  sb = createClient(cfg.url, cfg.anon);
+  const { data } = await sb.auth.getSession();
+  if (data.session) enter(data.session); else show('login');
+}
+$('cfg-save').onclick = () => {
+  const url = $('cfg-url').value.trim().replace(/\/+$/, '');
+  const anon = $('cfg-anon').value.trim();
+  if (!/^https:\/\/.+\.supabase\.co$/.test(url) || !anon) return say('請填入正確的 Project URL 與 anon key', 'bad');
+  if (anon.split('.').length === 3) {                       // 舊式 JWT 金鑰：檢查不是 service_role
+    try { if (JSON.parse(atob(anon.split('.')[1])).role === 'service_role') return say('這是 service_role key，請勿使用！', 'bad'); } catch {}
+  }
+  if (anon.startsWith('sb_secret_')) return say('這是 secret key，請勿使用！', 'bad');
+  localStorage.setItem(CFG, JSON.stringify({ url, anon }));
+  say(''); init();
+};
+$('cfg-reset').onclick = () => { localStorage.removeItem(CFG); sb = null; show('setup'); };
+$('login-btn').onclick = async () => {
+  say('登入中…');
+  const { data, error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('pw').value });
+  if (error) return say('登入失敗：' + error.message, 'bad');
+  $('pw').value = ''; say(''); enter(data.session);
+};
+$('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('login-btn').click(); });
+$('logout').onclick = async () => { await sb.auth.signOut(); all = []; show('login'); };
+
+function enter(session) {
+  $('who').textContent = session.user.email;
+  show('app');
+  load();
+}
+
+// ---------- 呼叫管理函式 ----------
+async function api(body) {
+  const { data: { session } } = await sb.auth.getSession();       // 取最新 token（必要時自動更新）
+  if (!session) { show('login'); throw new Error('登入已過期，請重新登入'); }
+  const res = await fetch(`${cfg.url}/functions/v1/admin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, apikey: cfg.anon },
+    body: JSON.stringify(body),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const m = { unauthorized: '登入無效，請重新登入', forbidden: '這個帳號沒有管理權限', 'not-found': '找不到該授權碼', 'bad-request': '輸入有誤', db: '資料庫錯誤' };
+    throw new Error(m[j.error] || `錯誤（${res.status}）`);
+  }
+  return j;
+}
+const run = async (body, okMsg) => {
+  try { await api(body); if (okMsg) say(okMsg, 'ok'); await load(); } catch (e) { say(e.message, 'bad'); }
+};
+
+// ---------- 清單 ----------
+async function load() {
+  try { all = (await api({ action: 'list' })).licenses; render(); } catch (e) { say(e.message, 'bad'); }
+}
+$('reload').onclick = () => { say(''); load(); };
+$('q').oninput = render;
+
+const copy = async (t) => { try { await navigator.clipboard.writeText(t); say('已複製', 'ok'); } catch { say('複製失敗，請手動選取', 'bad'); } };
+
+function render() {
+  const q = $('q').value.trim().toLowerCase();
+  const list = all.filter((l) => !q || l.key.toLowerCase().includes(q) || (l.note || '').toLowerCase().includes(q));
+  $('count').textContent = `共 ${all.length} 筆${q ? `，符合 ${list.length} 筆` : ''}`;
+  const tb = $('rows');
+  tb.replaceChildren();
+  const now = Date.now();
+  for (const l of list) {
+    const exp = new Date(l.expires_at).getTime();
+    const expired = exp <= now, soon = !expired && exp - now < 7 * 86400000;
+    const st = l.revoked ? ['已停用', 'bad'] : expired ? ['已過期', 'bad'] : soon ? ['即將到期', 'warn'] : ['有效', 'ok'];
+    const devs = l.devices.length
+      ? h('div', { class: 'dev' }, l.devices.map((d) => h('div', {},
+          `${d.device_id.slice(0, 8)}… 最後使用 ${fmt(d.last_seen)} `,
+          h('button', { class: 'small s', onclick: () => confirm('移除這台裝置？') && run({ action: 'remove_device', key: l.key, device_id: d.device_id }, '已移除裝置') }, '移除'))))
+      : '';
+    tb.append(h('tr', {},
+      h('td', {}, h('code', {}, l.key.slice(0, 8) + '…' + l.key.slice(-4)), ' ',
+        h('button', { class: 'small s', onclick: () => copy(l.key) }, '複製')),
+      h('td', {}, l.note || '', ' ', h('button', { class: 'small s', onclick: () => {
+        const n = prompt('備註', l.note || ''); if (n !== null) run({ action: 'update', key: l.key, note: n }, '已更新備註'); } }, '改')),
+      h('td', { class: expired ? 'bad' : soon ? 'warn' : '' }, fmt(l.expires_at)),
+      h('td', {}, `${l.devices.length} / ${l.max_devices} `,
+        h('button', { class: 'small s', onclick: () => {
+          const n = prompt('裝置上限（1–50）', l.max_devices); if (n !== null) run({ action: 'update', key: l.key, max_devices: Number(n) }, '已更新上限'); } }, '改'), devs),
+      h('td', { class: st[1] }, st[0]),
+      h('td', {},
+        h('button', { class: 'small', onclick: () => run({ action: 'set_revoked', key: l.key, revoked: !l.revoked }, l.revoked ? '已重新啟用' : '已停用') }, l.revoked ? '啟用' : '停用'),
+        h('button', { class: 'small', onclick: () => run({ action: 'extend', key: l.key, days: 30 }, '已延長 30 天') }, '+30 天'),
+        h('button', { class: 'small s', onclick: () => confirm('重設後，這組授權碼的所有裝置需要重新啟用。確定？') && run({ action: 'reset_devices', key: l.key }, '已重設裝置') }, '重設裝置'),
+        h('button', { class: 'small d', onclick: () => confirm(`確定刪除這組授權碼？\n${l.key}\n（無法復原，使用者會立即無法續期）`) && run({ action: 'delete', key: l.key }, '已刪除') }, '刪除'))));
+  }
+  if (!list.length) tb.append(h('tr', {}, h('td', { colspan: 6, class: 'mut' }, '沒有資料')));
+}
+
+// ---------- 新增 ----------
+$('n-create').onclick = async () => {
+  try {
+    const r = await api({
+      action: 'create', days: Number($('n-days').value), max_devices: Number($('n-max').value),
+      count: Number($('n-count').value), note: $('n-note').value,
+    });
+    const box = $('newkeys');
+    box.hidden = false;
+    box.replaceChildren(
+      h('div', { class: 'ok' }, `已產生 ${r.keys.length} 組授權碼（請複製後交給對方）：`),
+      ...r.keys.map((k) => h('div', {}, h('code', {}, k), ' ', h('button', { class: 'small s', onclick: () => copy(k) }, '複製'))),
+      r.keys.length > 1 ? h('button', { class: 'small', onclick: () => copy(r.keys.join('\n')) }, '複製全部') : '');
+    say(''); $('n-note').value = ''; await load();
+  } catch (e) { say(e.message, 'bad'); }
+};
+
+init();
+</script>
+</body>
+</html>

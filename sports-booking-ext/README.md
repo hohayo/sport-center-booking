@@ -1,10 +1,11 @@
-# 運動中心預約外掛（Chrome 擴充程式）v0.1
+# 運動中心預約外掛（Chrome 擴充程式）v0.2
 
 作者：Kyle, Chuang
 
 ```
 extension/        Chrome 擴充程式本體（載入這個資料夾）
 license-server/   授權伺服器（Supabase 邊緣函式 + 資料表 + 金鑰工具）
+  admin/admin.html  管理後台網頁（雙擊用瀏覽器開啟）
 ```
 
 ## 一、現在就能測試（不需要伺服器）
@@ -34,6 +35,34 @@ license-server/   授權伺服器（Supabase 邊緣函式 + 資料表 + 金鑰�
 4. **關掉測試模式**：`config.js` 裡 `DEV_MODE` 改成 `false`。**這步沒做，任何人輸入 DEV-TEST-0000 都能使用。**
 5. **發授權碼**：照 `schema.sql` 裡的範例 SQL 新增，授權碼請用夠長的隨機字串（範例用 32 碼），避免被猜中。
 6. **跑一次驗證測試**：`node license-server/tools/test-license.mjs`，應該全部 PASS。
+
+## 二之一、管理後台（產生授權碼、列表、停用、刪除、重設裝置）
+
+管理頁面是 `license-server/admin/admin.html`，用瀏覽器直接開啟（建議只放在你自己的電腦上，不要公開到網路）。
+
+設定步驟：
+1. **建立管理者帳號**：Supabase 後台 → Authentication → Users → Add user → Create new user，填入 `hohayo@gmail.com` 和一組強密碼，勾選自動確認信箱（Auto Confirm User）。
+2. **關閉公開註冊**：Authentication → Sign In / Providers → 關閉「Allow new users to sign up」，避免別人自己註冊帳號。
+3. **設定管理者白名單**（只有這個信箱能操作，其他登入者一律拒絕）：
+   ```
+   supabase secrets set ADMIN_EMAILS='hohayo@gmail.com'
+   ```
+   要加人就用逗號分隔：`'a@gmail.com,b@gmail.com'`。
+4. **部署管理函式**：
+   ```
+   supabase functions deploy admin --no-verify-jwt
+   ```
+   （登入驗證和白名單由函式自己檢查，所以不用平台的 JWT 驗證；瀏覽器預檢請求才不會被擋。）
+5. 用瀏覽器開啟 `admin.html`，第一次會要求填 **Project URL** 和 **anon / publishable key**（Supabase 後台 → Project Settings → API）。這兩個值本來就是公開的。**絕對不要貼 service_role / secret key**，頁面偵測到會拒絕。
+6. 用 `hohayo@gmail.com` 和剛才設定的密碼登入。
+
+功能：產生授權碼（可選天數、裝置上限、備註、一次最多 20 組）、列表與搜尋、到期與狀態標示、停用／啟用、+30 天、改備註與裝置上限、查看並移除個別裝置、重設全部裝置、刪除。
+
+安全說明：
+- service role key 只在伺服器（邊緣函式）使用，不會出現在網頁。
+- 每次操作都由伺服器重新驗證登入憑證與信箱白名單。
+- 備註等文字以純文字顯示，不會被當成網頁程式碼執行。
+- 停用或刪除授權碼後，該裝置最慢 7 天內失效（憑證有效期），若要立即失效需縮短 `TOKEN_DAYS`（`license/index.ts`）。
 
 ## 三、授權機制說明
 
