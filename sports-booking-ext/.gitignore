@@ -1,0 +1,14 @@
+# 金鑰（絕對不要 commit）
+*.pem
+*.key
+*private*.json
+license-server/keys/
+
+# Supabase 本地設定
+supabase/.temp/
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store

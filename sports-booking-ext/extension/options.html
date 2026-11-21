@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>運動中心預約外掛：授權設定</title>
+<style>
+  :root { --bg:#fff; --fg:#222; --bd:#bbb; --mut:#777; --pri:#1a73e8; --ok:#0a7d33; --bad:#c62828; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1e1f22; --fg:#e8e8e8; --bd:#555; --mut:#999; --pri:#4d8dff; --ok:#4cc474; --bad:#ff6b6b; }
+  }
+  body { background:var(--bg); color:var(--fg); font:15px/1.6 sans-serif; margin:0; padding:24px; }
+  main { max-width:480px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 16px; }
+  label { display:block; font-size:13px; color:var(--mut); margin:14px 0 4px; }
+  input { width:100%; box-sizing:border-box; padding:9px; border:1px solid var(--bd); border-radius:6px;
+          background:var(--bg); color:var(--fg); font:inherit; }
+  button { padding:9px 16px; border:0; border-radius:6px; background:var(--pri); color:#fff; cursor:pointer; font:inherit; margin-right:8px; }
+  button.sub { background:#888; }
+  #state { padding:10px 12px; border:1px solid var(--bd); border-radius:8px; margin-bottom:8px; }
+  #state.ok { border-color:var(--ok); color:var(--ok); }
+  #state.bad { border-color:var(--bad); color:var(--bad); }
+  #msg { min-height:1.6em; margin-top:10px; }
+  .dev { background:#fff3cd; color:#664d03; padding:8px 12px; border-radius:6px; margin-bottom:12px; font-size:13px; }
+  small { color:var(--mut); word-break:break-all; }
+  footer { margin-top:32px; text-align:center; font-size:12px; color:#888; }
+</style>
+</head>
+<body>
+<main>
+  <h1>運動中心預約外掛：授權設定</h1>
+  <div id="devbox" class="dev" hidden>⚠ 目前是測試模式（DEV_MODE）。可輸入測試碼 <b id="devkey"></b> 啟用。正式版請在 config.js 關閉。</div>
+  <div id="state">檢查中…</div>
+
+  <label for="key">授權碼</label>
+  <input id="key" placeholder="貼上你的授權碼" autocomplete="off" spellcheck="false">
+  <div style="margin-top:12px">
+    <button id="activate">啟用</button>
+    <button id="clear" class="sub">移除授權</button>
+  </div>
+  <div id="msg"></div>
+
+  <label>裝置 ID（需要客服協助時提供）</label>
+  <small id="device"></small>
+
+  <footer>作者：Kyle, Chuang</footer>
+</main>
+<script type="module" src="options.js"></script>
+</body>
+</html>
