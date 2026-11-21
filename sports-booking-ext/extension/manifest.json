@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "運動中心預約外掛",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "選日期、場地、時段，協助預約運動中心場地。需要授權碼。",
   "author": "Kyle, Chuang",
   "permissions": ["storage"],
