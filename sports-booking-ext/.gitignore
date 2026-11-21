@@ -5,7 +5,8 @@
 license-server/keys/
 
 # Supabase 本地設定
-supabase/.temp/
+**/.temp/
+**/**/.temp/
 
 # Node
 node_modules/
