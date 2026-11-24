@@ -227,7 +227,7 @@
       <b>運動中心預約外掛</b><span id="sp-toggle">收合</span>
       <div id="sp-body">
         <div class="row"><label>運動中心</label><b>${center.name}</b></div>
-        <div class="row"><label>登入帳號（將用這個帳號預約）</label><b id="sp-user"></b></div>
+        <div class="row"><label>登入帳號</label><b id="sp-user"></b></div>
         <div class="row"><label>日期</label><input type="date" id="sp-date" min="${todayStr}" value="${s.date}"></div>
         <div class="row"><label>場地</label><div class="grid3">
           ${sportList.map((v) => `<div class="b ${+s.sport === v ? 'on' : ''}" data-sport="${v}">${SPORTS[v]}</div>`).join('')}
