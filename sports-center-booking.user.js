@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         運動中心預約外掛
 // @namespace    local.sports.booking
-// @version      0.5
-// @description  選日期、場地、時段後產生預約連結，可定時搶預約；可選擇自動按「確定」完成預約
+// @version      0.6
+// @description  選日期、場地、時段後產生預約連結，可定時搶預約；可選擇自動按「確定」完成預約；顯示目前登入帳號
 // @author       Kyle, Chuang
 // @match        https://bymca.xuanen.com.tw/ymca01.aspx*
 // @match        https://scr.cyc.org.tw/tp25.aspx*
@@ -227,6 +227,7 @@
       <b>運動中心預約外掛</b><span id="sp-toggle">收合</span>
       <div id="sp-body">
         <div class="row"><label>運動中心</label><b>${center.name}</b></div>
+        <div class="row"><label>登入帳號（將用這個帳號預約）</label><b id="sp-user"></b></div>
         <div class="row"><label>日期</label><input type="date" id="sp-date" min="${todayStr}" value="${s.date}"></div>
         <div class="row"><label>場地</label><div class="grid3">
           ${sportList.map((v) => `<div class="b ${+s.sport === v ? 'on' : ''}" data-sport="${v}">${SPORTS[v]}</div>`).join('')}
@@ -270,6 +271,7 @@
     };
     renderCourts();
     renderLog();
+    showUser();
     q('#sp-run').onclick = startJob;
     q('#sp-stop').onclick = () => { sessionStorage.removeItem(JOB); status('已停止'); };
   }
@@ -287,6 +289,20 @@
 
   // ---------- 搶預約 ----------
   const norm = (t) => t.replace(/\s/g, '').replace(/～/g, '~');
+
+  // 目前登入的使用者名稱：網站頁首會顯示「○○○ 您好」（姓名通常已被網站遮蔽部分字元）
+  function getUserName() {
+    const text = (document.body ? document.body.innerText : '').slice(0, 600);
+    const m = text.match(/([^\s|｜]{1,20})\s*您好/);
+    return m ? m[1] : '';
+  }
+  function showUser() {
+    const el = box.querySelector('#sp-user');
+    if (!el) return;
+    const name = getUserName();
+    el.textContent = name || '未偵測到（可能尚未登入）';
+    el.style.color = name ? '' : 'var(--bad, #c62828)';
+  }
 
   // 回傳目前頁面所有可預約的格子，順序＝時間由早到晚、場地由上到下
   function candidates(hours, courts) {
@@ -342,9 +358,9 @@
     sessionStorage.removeItem(AUTOLOG);
     sessionStorage.removeItem(ALERT);
     sessionStorage.setItem(AUTO, JSON.stringify({ until: Date.now() + 30000, court: pick.court, time: pick.time }));
-    sessionStorage.setItem(RESULT, JSON.stringify({ at: Date.now(), time: pick.time, court: pick.court, reported: false }));
+    sessionStorage.setItem(RESULT, JSON.stringify({ at: Date.now(), time: pick.time, court: pick.court, user: getUserName(), reported: false }));
     for (let attempt = 1; attempt <= 2 && !sessionStorage.getItem(AUTOLOG); attempt++) {
-      status(`自動確認：${pick.time} ${pick.court}${tag}`);
+      status(`自動確認：${pick.time} ${pick.court}${tag}（帳號：${getUserName() || '未知'}）`);
       realClick(pick.el);
       for (let i = 0; i < 10 && !sessionStorage.getItem(AUTOLOG); i++) await sleep(200);
     }
@@ -369,10 +385,11 @@
     const alertTxt = sessionStorage.getItem(ALERT) || '';
     const text = (document.body ? document.body.innerText : '') + '\n' + alertTxt;
     if (alertTxt) status(`網站訊息：${alertTxt}`);
-    if (/預約成功|預約完成|已完成預約|訂位成功/.test(text)) status(`✔ 預約成功：${r.time} ${r.court}`);
-    else if (/失敗|無法預約|已被預約|額滿|錯誤/.test(alertTxt)) status(`✖ 預約可能失敗：${r.time} ${r.court}，請到會員的預約紀錄確認`);
+    const who = r.user ? `（帳號：${r.user}）` : '';
+    if (/預約成功|預約完成|已完成預約|訂位成功/.test(text)) status(`✔ 預約成功：${r.time} ${r.court}${who}`);
+    else if (/失敗|無法預約|已被預約|額滿|錯誤/.test(alertTxt)) status(`✖ 預約可能失敗：${r.time} ${r.court}${who}，請到會員的預約紀錄確認`);
     else if (/信用卡|卡號|付款|繳費|轉帳/.test(text)) status('頁面出現付款相關內容，請自行確認或完成付款（腳本不會輸入付款資料）');
-    else status(`已自動按下確定（${r.time} ${r.court}），請查看頁面或預約紀錄確認結果`);
+    else status(`已自動按下確定（${r.time} ${r.court}${who}），請查看頁面或預約紀錄確認結果`);
   }
 
   async function startJob() {
@@ -384,9 +401,11 @@
       return;
     }
     licOk = true;
+    const user = getUserName();
+    showUser();
     const future = s.startAt && new Date(s.startAt).getTime() > Date.now();   // 過去或現在 → 立即執行
-    sessionStorage.setItem(JOB, JSON.stringify({ ...s, startAt: future ? s.startAt : '', tries: 0, done: false }));
-    status('開始執行');
+    sessionStorage.setItem(JOB, JSON.stringify({ ...s, user, startAt: future ? s.startAt : '', tries: 0, done: false }));
+    status(user ? `開始執行（登入帳號：${user}）` : '開始執行（未偵測到登入帳號，可能尚未登入）');
     step();
   }
 
@@ -401,6 +420,12 @@
       licOk = true;
     }
     const put = () => sessionStorage.setItem(JOB, JSON.stringify(j));
+    const nowUser = getUserName();
+    if (j.user && nowUser && nowUser !== j.user) {        // 中途登入了別的帳號 → 停止，避免用錯帳號預約
+      sessionStorage.removeItem(JOB);
+      status(`登入帳號已從「${j.user}」變成「${nowUser}」，已停止`);
+      return;
+    }
     const startMs = j.startAt ? new Date(j.startAt).getTime() : 0;
 
     if (startMs && Date.now() < startMs) {
